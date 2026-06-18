@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:18-alpine
+    image: postgres:16-alpine
     container_name: postgres
     ports:
       - "5432:5432"
@@ -10,7 +10,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - ./scripts/database/postgresql.conf:/etc/postgresql/postgresql.conf
-      - ./scripts/database/init/:/docker-entrypoint-initdb.d/
+      - ./scripts/database/init:/docker-entrypoint-initdb.d
       - pg-data:/var/lib/postgresql/data
     command: postgres -c config_file=/etc/postgresql/postgresql.conf
     healthcheck:

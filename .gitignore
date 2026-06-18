@@ -1,0 +1,17 @@
+# Секреты
+.env
+*.env
+!*.env.example
+
+# Go
+*.exe
+*.test
+/bin/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# go.work.sum генерируется автоматически (опционально)
+go.work.sum

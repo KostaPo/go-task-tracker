@@ -54,6 +54,23 @@ services:
     networks:
       - app-net
 
+  migrate:
+    build:
+      context: .
+      dockerfile: ./initialization/Dockerfile
+    container_name: migrate
+    environment:
+      BACKEND_DB_SCHEMA:   ${BACKEND_DB_SCHEMA}
+      BACKEND_DB_USER:     ${BACKEND_DB_USER}
+      BACKEND_DB_PASSWORD: ${BACKEND_DB_PASSWORD}
+      DATABASE_URL:        postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - app-net
+    restart: "no"
+
   kafka:
     image: apache/kafka:4.3.0
     container_name: kafka

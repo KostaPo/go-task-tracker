@@ -7,7 +7,6 @@ FROM arigaio/atlas:latest-alpine AS atlas
 FROM golang:1.26-alpine AS build
 WORKDIR /src
 COPY . .
-RUN echo "=== /src/initialization ===" && find /src/initialization -maxdepth 4
 WORKDIR /src/initialization/cmd/app
 RUN CGO_ENABLED=0 go build -o /migrate main.go
 
@@ -15,13 +14,14 @@ RUN CGO_ENABLED=0 go build -o /migrate main.go
 FROM alpine:3.20
 RUN apk add --no-cache ca-certificates
 
-# бинарник atlas
-COPY --from=atlas /atlas /atlas
+# бинарник atlas — кладём в $PATH, чтобы его можно было находить просто по имени "atlas"
+COPY --from=atlas /atlas /usr/local/bin/atlas
 
-# конфиг и шаблоны миграций — берём уже из build-стадии,
-# так пути не зависят от того, откуда докер взял контекст
-COPY --from=build /src/initialization/cmd/app/atlas.hcl /migrations/atlas.hcl
-COPY --from=build /src/initialization/cmd/app/migrations-template /migrations/migrations-template
+# конфиг и шаблоны миграций — реальный путь: initialization/ (не cmd/app/)
+COPY --from=build /src/initialization/atlas.hcl /migrations/atlas.hcl
+COPY --from=build /src/initialization/migrations-template /migrations/migrations-template
+
+WORKDIR /migrations
 
 # наше Go-приложение
 COPY --from=build /migrate /migrate

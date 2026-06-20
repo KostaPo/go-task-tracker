@@ -57,13 +57,11 @@ services:
   migrate:
     build:
       context: .
-      dockerfile: ./initialization/Dockerfile
-    container_name: migrate
+      dockerfile: initialization/Dockerfile
+    env_file:
+      - .env
     environment:
-      BACKEND_DB_SCHEMA:   ${BACKEND_DB_SCHEMA}
-      BACKEND_DB_USER:     ${BACKEND_DB_USER}
-      BACKEND_DB_PASSWORD: ${BACKEND_DB_PASSWORD}
-      DATABASE_URL:        postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+      POSTGRES_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
     depends_on:
       postgres:
         condition: service_healthy

@@ -3,14 +3,24 @@ package main
 import (
 	"context"
 	"log"
+	"log/slog"
 	"os"
 
+	"github.com/kostapo/tasktracker/initialization/internal/config"
+
 	"ariga.io/atlas/atlasexec"
+	keycloakinit "github.com/kostapo/tasktracker/initialization/internal/keycloak"
+	"github.com/kostapo/tasktracker/initialization/internal/keycloak/steps"
 )
 
 func main() {
 	if err := runMigrations(); err != nil {
 		log.Fatalf("migrations failed: %v", err)
+	}
+
+	if err := run(); err != nil {
+		slog.Error("Инициализация Keycloak завершилась ошибкой", "error", err)
+		os.Exit(1)
 	}
 }
 
@@ -43,4 +53,39 @@ func runMigrations() error {
 
 	log.Printf("applied %d migrations", len(res.Applied))
 	return nil
+}
+
+func run() error {
+	ctx := context.Background()
+
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+
+	admin := keycloakinit.NewAdminClient(
+		cfg.Keycloak.URL,
+		cfg.Keycloak.AdminRealm,
+		cfg.Keycloak.AdminUsername,
+		cfg.Keycloak.AdminPassword,
+	)
+
+	realmCtx := keycloakinit.NewRealmContext(cfg.App.Realm, cfg.App.ClientID)
+
+	rt := &keycloakinit.Runtime{
+		Admin: admin,
+		Realm: realmCtx,
+	}
+
+	allSteps := []keycloakinit.Step{
+		steps.RealmInitStep{},
+		steps.NewClientInitStep(cfg.App.ClientID, cfg.App.RedirectURIs, cfg.App.WebOrigins, cfg.App.PostLogoutRedirectURIs),
+		steps.RolesInitStep{},
+		steps.RoleMapperInitStep{},
+		steps.NewUserProfileInitStep(cfg.Keycloak.URL),
+		steps.NewGoogleIdpInitStep(cfg.Google.ClientID, cfg.Google.ClientSecret),
+		steps.UsersInitStep{},
+	}
+
+	return keycloakinit.Run(ctx, rt, allSteps)
 }

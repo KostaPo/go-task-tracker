@@ -37,9 +37,9 @@ services:
       KC_DB_USERNAME: ${POSTGRES_USER}
       KC_DB_PASSWORD: ${POSTGRES_PASSWORD}
       KC_DB_SCHEMA: keycloak
-      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_USER}
-      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_PASSWORD}
-      KC_HOSTNAME: ${KEYCLOAK_HOST}
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USERNAME}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      KC_HOSTNAME: ${KEYCLOAK_URI}
       KC_HTTP_ENABLED: "true"
       KC_HEALTH_ENABLED: "true"
     healthcheck:
@@ -58,10 +58,35 @@ services:
     build:
       context: .
       dockerfile: initialization/Dockerfile
-    env_file:
-      - .env
     environment:
+      # ── База данных (Подключение внутри Docker-сети) ──
+      # Заменяем localhost на имя сервиса 'postgres'
       POSTGRES_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+      # Эти переменные могут понадобиться скриптам миграций БД
+      BACKEND_DB_SCHEMA: ${BACKEND_DB_SCHEMA}
+      BACKEND_DB_USER: ${BACKEND_DB_USER}
+      BACKEND_DB_PASSWORD: ${BACKEND_DB_PASSWORD}
+
+      # ── Keycloak (Подключение внутри Docker-сети) ──
+      # ВАЖНО: Заменяем localhost:9090 на имя сервиса 'keycloak' и ВНУТРЕННИЙ порт '8080'
+      KEYCLOAK_URI: http://keycloak:8080
+      KEYCLOAK_ADMIN_REALM: ${KEYCLOAK_ADMIN_REALM}
+      KEYCLOAK_ADMIN_CLIENT_ID: ${KEYCLOAK_ADMIN_CLIENT_ID}
+      KEYCLOAK_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USERNAME}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      
+      # ── Настройки приложения в Keycloak (Для браузера пользователя) ──
+      # ЭТИ переменные оставляем как в .env (с localhost), 
+      # потому что это URL-адреса, по которым браузер пользователя будет редиректиться после логина.
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM}
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID}
+      KEYCLOAK_REDIRECT_URIS: ${KEYCLOAK_REDIRECT_URIS}
+      KEYCLOAK_WEB_ORIGINS: ${KEYCLOAK_WEB_ORIGINS}
+      KEYCLOAK_LOGOUT_REDIRECT_URIS: ${KEYCLOAK_LOGOUT_REDIRECT_URIS}
+
+      # ── Google OAuth (Секреты, не зависят от сети) ──
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
     depends_on:
       postgres:
         condition: service_healthy

@@ -67,7 +67,7 @@ func run() error {
 		cfg.Keycloak.URL,
 		cfg.Keycloak.AdminRealm,
 		cfg.Keycloak.AdminUsername,
-		cfg.Keycloak.AdminPassword,
+		cfg.Keycloak.AdminPassword.Val(),
 	)
 
 	realmCtx := keycloakinit.NewRealmContext(cfg.App.Realm, cfg.App.ClientID)
@@ -83,7 +83,7 @@ func run() error {
 		steps.RolesInitStep{},
 		steps.RoleMapperInitStep{},
 		steps.NewUserProfileInitStep(cfg.Keycloak.URL),
-		steps.NewGoogleIdpInitStep(cfg.Google.ClientID, cfg.Google.ClientSecret),
+		steps.NewGoogleIdpInitStep(cfg.Google.ClientID, cfg.Google.ClientSecret.Val()),
 		steps.UsersInitStep{},
 	}
 

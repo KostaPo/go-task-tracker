@@ -4,22 +4,24 @@ package config
 
 import (
 	"fmt"
+	"log/slog"
+	"net/url"
 	"os"
 	"strings"
+
+	"github.com/joho/godotenv"
 )
 
 // KeycloakAdminConfig — параметры подключения к Keycloak под админской учёткой.
-// Аналог @Value("${keycloak...}") полей KeycloakInitializer в Java-версии.
 type KeycloakAdminConfig struct {
-	URL           string // KEYCLOAK_URI
-	AdminRealm    string // KEYCLOAK_ADMIN_REALM (обычно "master")
-	AdminClientID string // KEYCLOAK_ADMIN_CLIENT_ID (обычно "admin-cli")
-	AdminUsername string // KEYCLOAK_ADMIN_USERNAME
-	AdminPassword string // KEYCLOAK_ADMIN_PASSWORD
+	URL           string    // KEYCLOAK_URI
+	AdminRealm    string    // KEYCLOAK_ADMIN_REALM (обычно "master")
+	AdminClientID string    // KEYCLOAK_ADMIN_CLIENT_ID (обычно "admin-cli")
+	AdminUsername string    // KEYCLOAK_ADMIN_USERNAME
+	AdminPassword secretStr // KEYCLOAK_ADMIN_PASSWORD
 }
 
 // AppClientConfig — параметры realm'а и клиента приложения.
-// Аналог @Value("${app...}") полей KeycloakContext и ClientInitStep.
 type AppClientConfig struct {
 	Realm        string   // KEYCLOAK_REALM
 	ClientID     string   // KEYCLOAK_CLIENT_ID
@@ -28,15 +30,14 @@ type AppClientConfig struct {
 
 	// PostLogoutRedirectURIs хранится как есть, без разбиения:
 	// Keycloak ожидает значение атрибута "post.logout.redirect.uris"
-	// в виде строк, объединённых через "##" — это формат самого Keycloak,
-	// а не наш собственный разделитель, поэтому мы его не трогаем.
+	// в виде строк, объединённых через "##".
 	PostLogoutRedirectURIs string // KEYCLOAK_LOGOUT_REDIRECT_URIS
 }
 
 // GoogleConfig — параметры Google OAuth для настройки Identity Provider.
 type GoogleConfig struct {
-	ClientID     string // GOOGLE_CLIENT_ID
-	ClientSecret string // GOOGLE_CLIENT_SECRET
+	ClientID     string    // GOOGLE_CLIENT_ID
+	ClientSecret secretStr // GOOGLE_CLIENT_SECRET
 }
 
 // Config — корневая конфигурация приложения.
@@ -49,7 +50,10 @@ type Config struct {
 // Load читает конфигурацию из переменных окружения. Если рядом есть .env —
 // он подгружается заранее (значения из реального окружения имеют приоритет).
 func Load() (*Config, error) {
-	loadDotEnvIfPresent(".env")
+	// godotenv не перезаписывает уже выставленные переменные окружения.
+	if err := godotenv.Load(); err != nil {
+		slog.Debug("файл .env не найден, продолжаем без него", "err", err)
+	}
 
 	var missing []string
 	req := func(key string) string {
@@ -72,7 +76,7 @@ func Load() (*Config, error) {
 			AdminRealm:    req("KEYCLOAK_ADMIN_REALM"),
 			AdminClientID: opt("KEYCLOAK_ADMIN_CLIENT_ID", "admin-cli"),
 			AdminUsername: req("KEYCLOAK_ADMIN_USERNAME"),
-			AdminPassword: req("KEYCLOAK_ADMIN_PASSWORD"),
+			AdminPassword: secretStr(req("KEYCLOAK_ADMIN_PASSWORD")),
 		},
 		App: AppClientConfig{
 			Realm:                  req("KEYCLOAK_REALM"),
@@ -83,7 +87,7 @@ func Load() (*Config, error) {
 		},
 		Google: GoogleConfig{
 			ClientID:     req("GOOGLE_CLIENT_ID"),
-			ClientSecret: req("GOOGLE_CLIENT_SECRET"),
+			ClientSecret: secretStr(req("GOOGLE_CLIENT_SECRET")),
 		},
 	}
 
@@ -93,6 +97,17 @@ func Load() (*Config, error) {
 
 	cfg.Keycloak.URL = strings.TrimRight(cfg.Keycloak.URL, "/")
 
+	if _, err := url.ParseRequestURI(cfg.Keycloak.URL); err != nil {
+		return nil, fmt.Errorf("KEYCLOAK_URI невалидный URL: %w", err)
+	}
+
+	slog.Info("конфигурация загружена",
+		"keycloak_url", cfg.Keycloak.URL,
+		"admin_realm", cfg.Keycloak.AdminRealm,
+		"app_realm", cfg.App.Realm,
+		"client_id", cfg.App.ClientID,
+	)
+
 	return cfg, nil
 }
 
@@ -100,36 +115,19 @@ func splitCSV(raw string) []string {
 	parts := strings.Split(raw, ",")
 	out := make([]string, 0, len(parts))
 	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p != "" {
+		if p = strings.TrimSpace(p); p != "" {
 			out = append(out, p)
 		}
 	}
 	return out
 }
 
-// loadDotEnvIfPresent — минимальный загрузчик .env без внешних зависимостей:
-// разбирает строки вида KEY=VALUE и проставляет их в окружение процесса,
-// только если переменная ещё не задана снаружи.
-func loadDotEnvIfPresent(path string) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return // .env необязателен — например, в проде переменные задаются оркестратором
-	}
+// secretStr — обёртка над string, которая скрывает значение в логах и дампах.
+// %v, %s, %+v и fmt.Sprint* вернут "***" вместо реального значения.
+type secretStr string
 
-	for _, line := range strings.Split(string(data), "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		key, value, ok := strings.Cut(line, "=")
-		if !ok {
-			continue
-		}
-		key = strings.TrimSpace(key)
-		value = strings.Trim(strings.TrimSpace(value), `"'`)
-		if _, exists := os.LookupEnv(key); !exists {
-			_ = os.Setenv(key, value)
-		}
-	}
-}
+func (s secretStr) String() string   { return "***" }
+func (s secretStr) GoString() string { return `secretStr("***")` }
+
+// Val возвращает реальное значение — используй явно только там, где оно нужно.
+func (s secretStr) Val() string { return string(s) }

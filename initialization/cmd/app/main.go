@@ -3,8 +3,9 @@ package main
 import (
 	"context"
 	"log"
-	"log/slog"
 	"os"
+
+	"github.com/kostapo/tasktracker/shared/logger"
 
 	"github.com/kostapo/tasktracker/initialization/internal/config"
 
@@ -14,12 +15,14 @@ import (
 )
 
 func main() {
+
+	log := logger.New("INIT-SERVICE")
 	if err := runMigrations(); err != nil {
-		log.Fatalf("migrations failed: %v", err)
+		log.Error("migrations failed", "error", err)
 	}
 
 	if err := run(); err != nil {
-		slog.Error("Инициализация Keycloak завершилась ошибкой", "error", err)
+		log.Error("Инициализация Keycloak завершилась ошибкой", "error", err)
 		os.Exit(1)
 	}
 }
